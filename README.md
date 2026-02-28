@@ -2,9 +2,11 @@
 
 A retro NES-style HTML5 canvas game where you play as **Dottie the dog**, exploring the real streets of **Milltown, NJ** on a daring off-leash adventure!
 
-## Play
+## Play Online
 
-Open `dotties-milltown-frolic-v7.html` in any modern browser. No install or build step required.
+**[Play Dottie's Milltown Frolic!](https://ssmoke21.github.io/dotties-milltown-frolic/)**
+
+Or open `dotties-milltown-frolic-v7.html` locally in any modern browser. No install or build step required.
 
 ## How to Play
 

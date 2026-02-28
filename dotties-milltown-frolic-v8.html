@@ -84,9 +84,9 @@ canvas{display:block;}
 #tc-boost .bl{font-size:32px;}
 #tc-boost .bt{font-family:'Press Start 2P',monospace;font-size:6px;color:#FFD700;letter-spacing:1px;}
 
-/* Hide touch UI when primary pointer is fine (mouse/trackpad).
-   Covers both regular desktops and touch-screen laptops. */
-@media (pointer:fine){
+/* Hide touch UI on wide screens (laptops/desktops) regardless of
+   touch capability, and on any fine-pointer device. */
+@media (pointer:fine), (min-width:1024px){
   #touch-ui{display:none!important;}
 }
 </style>
@@ -332,7 +332,10 @@ const V={up:false,down:false,left:false,right:false,boost:false};
 // Each button tracks its own active touch IDs so multi-touch works correctly
 // (e.g. holding left while pressing boost).
 function setupTouchControls(){
-  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+  // Treat as mobile only if primary pointer is coarse AND screen is
+  // narrow — this excludes touch-screen laptops which have wide screens.
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
+    && window.innerWidth < 1024;
 
   if(!isTouchDevice) return;
 
@@ -385,7 +388,10 @@ function resizeGame(){
 
   // Use (pointer: coarse) not (any-pointer: coarse) so that touch-screen
   // laptops with a mouse/trackpad primary pointer aren't treated as mobile.
-  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+  // Treat as mobile only if primary pointer is coarse AND screen is
+  // narrow — this excludes touch-screen laptops which have wide screens.
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
+    && window.innerWidth < 1024;
 
   // D-pad is 3×72px cells + 2×5px gaps + padding
   const tcReserved = isTouchDevice ? 242 : 0;

@@ -84,8 +84,9 @@ canvas{display:block;}
 #tc-boost .bl{font-size:32px;}
 #tc-boost .bt{font-family:'Press Start 2P',monospace;font-size:6px;color:#FFD700;letter-spacing:1px;}
 
-/* Desktop: hide touch UI on precise pointer devices */
-@media (hover:hover) and (pointer:fine){
+/* Hide touch UI when primary pointer is fine (mouse/trackpad).
+   Covers both regular desktops and touch-screen laptops. */
+@media (pointer:fine){
   #touch-ui{display:none!important;}
 }
 </style>
@@ -331,10 +332,7 @@ const V={up:false,down:false,left:false,right:false,boost:false};
 // Each button tracks its own active touch IDs so multi-touch works correctly
 // (e.g. holding left while pressing boost).
 function setupTouchControls(){
-  const isTouchDevice =
-    ('ontouchstart' in window) ||
-    (navigator.maxTouchPoints > 0) ||
-    window.matchMedia('(any-pointer: coarse)').matches;
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 
   if(!isTouchDevice) return;
 
@@ -385,10 +383,9 @@ const NATIVE_H = 618;   // 560 canvas + ~50px HUD + borders
 function resizeGame(){
   const wrap = document.getElementById('wrap');
 
-  const isTouchDevice =
-    ('ontouchstart' in window) ||
-    (navigator.maxTouchPoints > 0) ||
-    window.matchMedia('(any-pointer: coarse)').matches;
+  // Use (pointer: coarse) not (any-pointer: coarse) so that touch-screen
+  // laptops with a mouse/trackpad primary pointer aren't treated as mobile.
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 
   // D-pad is 3×72px cells + 2×5px gaps + padding
   const tcReserved = isTouchDevice ? 242 : 0;

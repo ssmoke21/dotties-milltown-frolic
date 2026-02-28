@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Dottie's Milltown Frolic!</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d0d1f;}
+body{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-start;
+  font-family:'Press Start 2P',monospace;
+  touch-action:none;
+}
+#wrap{
+  position:fixed;top:0;left:0;
+  transform-origin:top left;
+  border:4px solid #ffe000;
+  box-shadow:0 0 40px #ffe000aa,0 0 80px #ff8c0055;
+}
+canvas{display:block;}
+#hud{
+  background:#050510;border-top:3px solid #ffe000;padding:5px 12px;
+  display:flex;justify-content:space-between;align-items:center;
+  width:100%;color:#ffe000;font-size:7px;gap:6px;
+}
+.hi{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hl{color:#666;font-size:5px;}.hv{color:#fff;font-size:8px;}.hv.y{color:#ffe000;}
+#loading{
+  position:absolute;top:0;left:0;right:0;bottom:40px;
+  background:#0d0d1f;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;color:#ffe000;gap:16px;z-index:20;
+}
+#loadMsg{font-size:8px;color:#aaa;}
+
+/* ── Touch controls ─────────────────────────────────────── */
+#touch-ui{
+  position:fixed;bottom:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:flex-end;
+  padding:10px 18px;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));
+  pointer-events:none;
+  z-index:200;
+  /* hidden by default; JS shows on touch device */
+  visibility:hidden;
+}
+#dpad{
+  display:grid;
+  grid-template-columns:72px 72px 72px;
+  grid-template-rows:72px 72px 72px;
+  gap:5px;
+}
+.tc{
+  pointer-events:all;
+  background:rgba(255,224,0,0.18);
+  border:3px solid rgba(255,224,0,0.55);
+  border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:30px;
+  cursor:pointer;
+  transition:background .08s,border-color .08s;
+  box-shadow:0 2px 8px rgba(0,0,0,0.5);
+}
+.tc.active{background:rgba(255,224,0,0.50);border-color:#ffe000;}
+#tc-center{background:rgba(255,224,0,0.06);border-color:rgba(255,224,0,0.18);pointer-events:none;font-size:20px;}
+#tc-boost{
+  pointer-events:all;
+  width:110px;height:110px;
+  background:rgba(255,100,0,0.25);
+  border:3px solid rgba(255,160,0,0.65);
+  border-radius:50%;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;
+  box-shadow:0 2px 12px rgba(0,0,0,0.5);
+  transition:background .08s,border-color .08s;
+}
+#tc-boost.active{background:rgba(255,150,0,0.55);border-color:#ffaa00;}
+#tc-boost .bl{font-size:32px;}
+#tc-boost .bt{font-family:'Press Start 2P',monospace;font-size:6px;color:#FFD700;letter-spacing:1px;}
+
+/* Desktop: hide touch UI on precise pointer devices */
+@media (hover:hover) and (pointer:fine){
+  #touch-ui{display:none!important;}
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="800" height="560"></canvas>
+  <div id="hud">
+    <div class="hi"><span class="hl">SCORE</span><span class="hv y" id="hS">0</span></div>
+    <div class="hi"><span class="hl">BEST</span><span class="hv" id="hB">0</span></div>
+    <div class="hi"><span class="hl">LIVES</span><span class="hv" id="hL">❤️❤️❤️</span></div>
+    <div class="hi"><span class="hl">LEVEL</span><span class="hv y" id="hLv">1</span></div>
+    <div class="hi"><span class="hl">BOOST</span><span class="hv" id="hBo">READY</span></div>
+    <canvas id="mm" width="88" height="72" style="border:1px solid #333;"></canvas>
+  </div>
+  <div id="loading">
+    <div style="font-size:14px;color:#ffe000;">🐾 DOTTIE'S MILLTOWN FROLIC</div>
+    <p id="loadMsg">Loading Milltown map...</p>
+  </div>
+</div>
+
+<!-- Touch controls overlay -->
+<div id="touch-ui">
+  <div id="dpad">
+    <!-- row 1 -->
+    <div></div>
+    <div class="tc" id="tc-up">⬆️</div>
+    <div></div>
+    <!-- row 2 -->
+    <div class="tc" id="tc-left">⬅️</div>
+    <div id="tc-center">🐾</div>
+    <div class="tc" id="tc-right">➡️</div>
+    <!-- row 3 -->
+    <div></div>
+    <div class="tc" id="tc-down">⬇️</div>
+    <div></div>
+  </div>
+  <div id="tc-boost">
+    <span class="bl">🚀</span>
+    <span class="bt">BOOST!</span>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════
+//  DOTTIE'S MILLTOWN FROLIC  v8
+//  • v7 base — real OSM map tiles for Milltown NJ
+//  • v8 additions: mobile touch controls + responsive scaling
+//  © OpenStreetMap contributors
+// ═══════════════════════════════════════════════════════════════
+
+const C  = document.getElementById('c');
+const cx = C.getContext('2d');
+const MM = document.getElementById('mm');
+const mx = MM.getContext('2d');
+const VW=800, VH=560;
+
+// ── Canvas state reset ────────────────────────────────────────
+function resetCtx(ctx) {
+  ctx.shadowBlur    = 0;
+  ctx.shadowColor   = 'transparent';
+  ctx.globalAlpha   = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.lineWidth     = 1;
+  ctx.lineCap       = 'butt';
+  ctx.lineJoin      = 'miter';
+  ctx.setLineDash([]);
+  ctx.lineDashOffset= 0;
+  ctx.font          = '10px sans-serif';
+  ctx.textAlign     = 'left';
+  ctx.textBaseline  = 'alphabetic';
+  ctx.fillStyle     = '#000';
+  ctx.strokeStyle   = '#000';
+}
+
+// ── World size & geo projection ───────────────────────────────
+const WW = 1600, WH = 1300;
+const ZOOM = 16;
+const TX0 = 19214, TY0 = 24699;
+const TX1 = 19219, TY1 = 24704;
+const GEO = {
+  n:  40.467845,
+  s:  40.442767,
+  w: -74.454346,
+  e: -74.421387
+};
+function geoToWorld(lat, lon) {
+  const x = ((lon - GEO.w) / (GEO.e - GEO.w)) * WW;
+  const y = ((GEO.n - lat) / (GEO.n - GEO.s)) * WH;
+  return [x, y];
+}
+
+// ── Map tile canvas ───────────────────────────────────────────
+const mapCanvas = document.createElement('canvas');
+mapCanvas.width  = WW;
+mapCanvas.height = WH;
+const mapCtx = mapCanvas.getContext('2d');
+let mapLoaded = false;
+
+async function loadMapTiles() {
+  const msg = document.getElementById('loadMsg');
+  const TILE_SIZE = 256;
+  const COLS = TX1 - TX0 + 1;
+  const ROWS = TY1 - TY0 + 1;
+  const srcW = COLS * TILE_SIZE;
+  const srcH = ROWS * TILE_SIZE;
+  const tileCanvas = document.createElement('canvas');
+  tileCanvas.width  = srcW;
+  tileCanvas.height = srcH;
+  const tCtx = tileCanvas.getContext('2d');
+  let loaded = 0;
+  const total = COLS * ROWS;
+  const promises = [];
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const tx = TX0 + col;
+      const ty = TY0 + row;
+      const url = `https://tile.openstreetmap.org/${ZOOM}/${tx}/${ty}.png`;
+      promises.push(
+        new Promise((res) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            tCtx.drawImage(img, col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            loaded++;
+            msg.textContent = `Loading map tiles… ${loaded}/${total}`;
+            res();
+          };
+          img.onerror = () => {
+            tCtx.fillStyle = '#a8c880';
+            tCtx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            loaded++;
+            res();
+          };
+          img.src = url;
+        })
+      );
+    }
+  }
+  await Promise.all(promises);
+  mapCtx.filter = 'saturate(1.3) contrast(1.05)';
+  mapCtx.drawImage(tileCanvas, 0, 0, WW, WH);
+  mapCtx.filter = 'none';
+  mapLoaded = true;
+  document.getElementById('loading').style.display = 'none';
+}
+
+// ── High scores ───────────────────────────────────────────────
+function loadHS(){try{return JSON.parse(localStorage.getItem('dottieHS7')||'[]');}catch{return[];}}
+function saveHS(s){let a=loadHS();a.push(s);a.sort((a,b)=>b-a);a=a.slice(0,5);try{localStorage.setItem('dottieHS7',JSON.stringify(a));}catch{}return a;}
+
+// ── Game state ────────────────────────────────────────────────
+let STATE='loading';
+let score=0,lives=3,level=1,gframe=0,titleF=0;
+let shX=0,shY=0,shT=0;
+let particles=[];
+let HS=loadHS();
+
+// ── Camera ────────────────────────────────────────────────────
+const cam={x:0,y:0};
+function snapCam(tx,ty){
+  cam.x=Math.round(Math.max(0,Math.min(WW-VW,tx-VW/2)));
+  cam.y=Math.round(Math.max(0,Math.min(WH-VH,ty-VH/2)));
+}
+function sx(v){return Math.round(v - cam.x + shX);}
+function sy(v){return Math.round(v - cam.y + shY);}
+function pr(x,y,w,h,c){cx.fillStyle=c;cx.fillRect(x,y,w,h);}
+
+// ── Landmarks ─────────────────────────────────────────────────
+const LM_DEF = [
+  {n:"MARIA'S\nPIZZA",      lat:40.4585, lon:-74.4412, w:90, h:66, c:'#CC2222', food:'🍕', pts:25},
+  {n:"ICE CREAM\nDEPOT",    lat:40.4535, lon:-74.4414, w:90, h:64, c:'#FF88BB', food:'🍦', pts:20},
+  {n:"FOUR BOYS\nICE CREAM", lat:40.4527, lon:-74.4387, w:98, h:64, c:'#2244CC', food:'🍦', pts:20},
+  {n:"BOROUGH\nHALL",        lat:40.4527, lon:-74.4438, w:86, h:64, c:'#998866', food:'🏛️', pts:5},
+  {n:"LIBRARY",              lat:40.4557, lon:-74.4432, w:82, h:60, c:'#775533', food:'📚', pts:10},
+  {n:"KILMER\nSCHOOL",       lat:40.4560, lon:-74.4431, w:88, h:64, c:'#886600', food:'🎒', pts:10},
+  {n:"HOME\n141 Albert",     lat:40.4513, lon:-74.4462, w:70, h:56, c:'#A04820', food:'🦴', pts:5},
+  {n:"BESTIE'S\nHOUSE",      lat:40.4590, lon:-74.4230, w:80, h:60, c:'#BB44AA', food:'🍪', pts:15},
+  {n:"MILLTOWN\nCONV.",       lat:40.4555, lon:-74.4362, w:88, h:58, c:'#337744', food:'🥤', pts:15},
+  {n:"MILLTOWN\nDINER",       lat:40.4522, lon:-74.4272, w:90, h:62, c:'#CC9922', food:'🥞', pts:20},
+  {n:"FIRE HOUSE",            lat:40.4512, lon:-74.4250, w:82, h:58, c:'#CC3300', food:'🚒', pts:5},
+  {n:"BORO PARK",             lat:40.4600, lon:-74.4478, w:140,h:120,c:'#2EAA44', food:'🌳', pts:10, park:true},
+  {n:"ALBERT AVE\nPARK",      lat:40.4512, lon:-74.4478, w:90, h:80, c:'#3BAA33', food:'⚽', pts:10, park:true},
+];
+let LM = [];
+function initLandmarks(){
+  LM = LM_DEF.map(d=>{
+    const [wx,wy] = geoToWorld(d.lat, d.lon);
+    return {...d, wx:wx-d.w/2, wy:wy-d.h/2};
+  });
+}
+
+// ── Title screen stars ────────────────────────────────────────
+const stars=Array.from({length:70},()=>({
+  x:Math.random()*VW, y:Math.random()*VH,
+  sz:Math.random()*1.8+0.4, spd:Math.random()*0.22+0.07,
+  tw:Math.random()*Math.PI*2
+}));
+let titleDX=VW+80, titleDDir=-1;
+
+// ── Dottie ────────────────────────────────────────────────────
+const DOT={wx:400,wy:700,dir:1,spd:2.8,boosting:false,bTimer:0,bCool:0};
+
+// ── Parents ───────────────────────────────────────────────────
+const PARENTS=[
+  {wx:600,wy:300,spd:1.1,col:'#3355CC',trim:'#7799FF',name:'MOM',fr:0,wa:0},
+  {wx:1200,wy:800,spd:1.0,col:'#CC3333',trim:'#FF8866',name:'DAD',fr:0,wa:Math.PI},
+];
+
+// ── Food & bones ──────────────────────────────────────────────
+let FOOD=[], BONES=[];
+function spawnAll(){
+  FOOD=[];
+  LM.forEach(lm=>{
+    for(let i=0;i<(lm.park?3:2);i++){
+      FOOD.push({
+        wx:lm.wx+14+Math.random()*(lm.w-28),
+        wy:lm.wy+14+Math.random()*(lm.h-28),
+        emoji:lm.food, pts:lm.pts, lm,
+        bob:Math.random()*Math.PI*2, col:false, respawn:0
+      });
+    }
+  });
+  BONES=[];
+  for(let i=0;i<10;i++)
+    BONES.push({wx:80+Math.random()*(WW-160), wy:80+Math.random()*(WH-160), col:false, respawn:0});
+}
+
+// ── Input: keyboard ───────────────────────────────────────────
+const K={};
+window.addEventListener('keydown',e=>{
+  K[e.code]=true;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup',e=>{K[e.code]=false;});
+
+// ── Input: virtual keys (touch) ───────────────────────────────
+const V={up:false,down:false,left:false,right:false,boost:false};
+
+// ── Touch control setup ───────────────────────────────────────
+// Detects whether the device is touch-capable and sets up D-pad buttons.
+// Each button tracks its own active touch IDs so multi-touch works correctly
+// (e.g. holding left while pressing boost).
+function setupTouchControls(){
+  const isTouchDevice =
+    ('ontouchstart' in window) ||
+    (navigator.maxTouchPoints > 0) ||
+    window.matchMedia('(any-pointer: coarse)').matches;
+
+  if(!isTouchDevice) return;
+
+  document.getElementById('touch-ui').style.visibility = 'visible';
+
+  function bindBtn(id, vkey){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const active = new Set();
+
+    el.addEventListener('touchstart', e=>{
+      e.preventDefault();
+      for(const t of e.changedTouches) active.add(t.identifier);
+      V[vkey] = true;
+      el.classList.add('active');
+    }, {passive:false});
+
+    const release = e=>{
+      e.preventDefault();
+      for(const t of e.changedTouches) active.delete(t.identifier);
+      if(active.size === 0){
+        V[vkey] = false;
+        el.classList.remove('active');
+      }
+    };
+    el.addEventListener('touchend',   release, {passive:false});
+    el.addEventListener('touchcancel',release, {passive:false});
+  }
+
+  bindBtn('tc-up',    'up');
+  bindBtn('tc-down',  'down');
+  bindBtn('tc-left',  'left');
+  bindBtn('tc-right', 'right');
+  bindBtn('tc-boost', 'boost');
+
+  // Tap anywhere on game canvas to start / restart
+  C.addEventListener('touchstart', e=>{
+    if(STATE==='title'||STATE==='gameover') resetGame();
+  }, {passive:true});
+}
+
+// ── Responsive scaling ────────────────────────────────────────
+// Scales #wrap to fill available screen space, leaving room for
+// the touch D-pad at the bottom on mobile.
+const NATIVE_W = 808;   // 800 canvas + 4px border each side
+const NATIVE_H = 618;   // 560 canvas + ~50px HUD + borders
+
+function resizeGame(){
+  const wrap = document.getElementById('wrap');
+  const tcUI = document.getElementById('touch-ui');
+
+  const isTouchDevice =
+    ('ontouchstart' in window) ||
+    (navigator.maxTouchPoints > 0) ||
+    window.matchMedia('(any-pointer: coarse)').matches;
+
+  // D-pad is 3×72px cells + 2×5px gaps = 226px tall + padding
+  const tcReserved = isTouchDevice ? 242 : 0;
+
+  const availW = window.innerWidth;
+  const availH = window.innerHeight - tcReserved;
+
+  let scale = Math.min(availW / NATIVE_W, availH / NATIVE_H);
+  scale = Math.max(0.25, Math.min(scale, 1)); // clamp: never upscale, min 25%
+
+  const scaledW = NATIVE_W * scale;
+  const offsetX = Math.max(0, (availW - scaledW) / 2);
+
+  wrap.style.transform = `translateX(${offsetX}px) scale(${scale})`;
+  wrap.style.transformOrigin = 'top left';
+}
+
+window.addEventListener('resize', resizeGame);
+window.addEventListener('orientationchange', ()=>setTimeout(resizeGame,120));
+
+// ── Particles ─────────────────────────────────────────────────
+function addP(wx2,wy2,txt,col,big){
+  particles.push({wx:wx2,wy:wy2,txt,col,life:90,max:90,vy:-1.0,big:!!big});
+}
+
+// ── Reset ─────────────────────────────────────────────────────
+function resetGame(){
+  const home=LM.find(l=>l.n.startsWith('HOME'));
+  score=0;lives=3;level=1;gframe=0;shX=0;shY=0;shT=0;
+  DOT.wx=home?home.wx+home.w/2:400;
+  DOT.wy=home?home.wy+home.h/2:700;
+  DOT.dir=1;DOT.boosting=false;DOT.bTimer=0;DOT.bCool=0;
+  PARENTS[0].wx=600;PARENTS[0].wy=300;PARENTS[0].spd=1.1;
+  PARENTS[1].wx=1200;PARENTS[1].wy=800;PARENTS[1].spd=1.0;
+  particles=[];
+  // Clear virtual keys so a held boost tap doesn't immediately zoom
+  V.up=V.down=V.left=V.right=V.boost=false;
+  spawnAll();
+  STATE='playing';
+}
+
+function pSpeed(b){return Math.min(b+(level-1)*0.15,2.5);}
+function lvlThresh(){return level*160;}
+
+// ══════════════════════════════════════════════════════════════
+//  UPDATE
+// ══════════════════════════════════════════════════════════════
+function update(){
+  titleF++;
+  if(STATE==='loading'||STATE==='paused') return;
+  if(STATE==='title'){
+    titleDX += 2.5*titleDDir;
+    if(titleDX > VW+100){titleDX=VW+100; titleDDir=-1;}
+    if(titleDX < -100){titleDX=-100; titleDDir=1;}
+    return;
+  }
+  if(STATE!=='playing') return;
+  gframe++;
+
+  // Movement (keyboard OR virtual touch keys)
+  const spd=DOT.boosting?DOT.spd*2.4:DOT.spd;
+  let dx=0,dy=0;
+  if(K['ArrowLeft'] ||K['KeyA']||V.left) {dx=-spd;DOT.dir=-1;}
+  if(K['ArrowRight']||K['KeyD']||V.right){dx= spd;DOT.dir= 1;}
+  if(K['ArrowUp']   ||K['KeyW']||V.up)    dy=-spd;
+  if(K['ArrowDown'] ||K['KeyS']||V.down)  dy= spd;
+  if(dx&&dy){dx*=0.707;dy*=0.707;}
+  DOT.wx=Math.max(16,Math.min(WW-16,DOT.wx+dx));
+  DOT.wy=Math.max(16,Math.min(WH-16,DOT.wy+dy));
+
+  // Boost (Space key OR boost button)
+  if(DOT.bCool>0) DOT.bCool--;
+  if(DOT.boosting){DOT.bTimer--;if(DOT.bTimer<=0)DOT.boosting=false;}
+  if((K['Space']||V.boost)&&DOT.bCool===0&&!DOT.boosting){
+    DOT.boosting=true;DOT.bTimer=100;DOT.bCool=360;
+    addP(DOT.wx,DOT.wy-20,'💨 ZOOM!','#FFD700',true);
+  }
+
+  snapCam(DOT.wx,DOT.wy);
+
+  // Food
+  FOOD.forEach(f=>{
+    if(f.col){
+      if(gframe>=f.respawn){f.col=false;f.wx=f.lm.wx+14+Math.random()*(f.lm.w-28);f.wy=f.lm.wy+14+Math.random()*(f.lm.h-28);}
+      return;
+    }
+    f.bob+=0.05;
+    if(Math.hypot(DOT.wx-f.wx,DOT.wy-f.wy)<22){
+      f.col=true;f.respawn=gframe+300;score+=f.pts;
+      addP(f.wx,f.wy-10,'+'+f.pts+' '+f.emoji,'#FFD700');
+      if(score>=lvlThresh()){level++;addP(DOT.wx,DOT.wy-40,'⭐ LEVEL '+level+'!','#FFD700',true);shT=20;}
+    }
+  });
+
+  // Bones
+  BONES.forEach(b=>{
+    if(b.col){
+      if(gframe>=b.respawn){b.col=false;b.wx=80+Math.random()*(WW-160);b.wy=80+Math.random()*(WH-160);}
+      return;
+    }
+    if(Math.hypot(DOT.wx-b.wx,DOT.wy-b.wy)<22){
+      b.col=true;b.respawn=gframe+500;DOT.bCool=0;
+      addP(b.wx,b.wy-10,'🦴 ZOOM READY!','#fff',true);
+    }
+  });
+
+  // Parents
+  PARENTS.forEach(p=>{
+    p.fr++;p.wa+=0.016;
+    const ps=pSpeed(p.spd);
+    const dist=Math.hypot(DOT.wx-p.wx,DOT.wy-p.wy);
+    const detect=260+level*25;
+    const angle=dist<detect
+      ? Math.atan2(DOT.wy-p.wy,DOT.wx-p.wx)+(Math.random()-.5)*0.18
+      : p.wa;
+    p.wx=Math.max(16,Math.min(WW-16,p.wx+Math.cos(angle)*ps));
+    p.wy=Math.max(16,Math.min(WH-16,p.wy+Math.sin(angle)*ps));
+    if(dist<26){
+      lives--;shT=40;
+      addP(DOT.wx,DOT.wy-30,'CAUGHT! 💔','#ff4444',true);
+      const home=LM.find(l=>l.n.startsWith('HOME'));
+      DOT.wx=home?home.wx+home.w/2:400;
+      DOT.wy=home?home.wy+home.h/2:700;
+      p.wx=700+Math.random()*300;p.wy=200+Math.random()*400;
+      if(lives<=0){HS=saveHS(score);STATE='gameover';}
+    }
+  });
+
+  // Shake decay
+  if(shT>0){shT--;shX=(Math.random()-.5)*6;shY=(Math.random()-.5)*6;}else{shX=0;shY=0;}
+
+  // Particles
+  particles.forEach(p=>{p.wy+=p.vy;p.life--;});
+  particles=particles.filter(p=>p.life>0);
+
+  // HUD
+  document.getElementById('hS').textContent=score;
+  document.getElementById('hB').textContent=HS[0]||0;
+  document.getElementById('hL').textContent='❤️'.repeat(Math.max(0,lives));
+  document.getElementById('hLv').textContent=level;
+  const bc=DOT.bCool;
+  document.getElementById('hBo').textContent=DOT.boosting?'ZOOMING!':bc>0?Math.ceil(bc/60)+'s':'READY';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DRAW: DOTTIE
+// ══════════════════════════════════════════════════════════════
+function drawDot(wx2,wy2,dir,fr,alpha){
+  const s=2;
+  const px0=sx(wx2)-16, py0=sy(wy2)-22;
+  const leg=Math.sin(fr*0.32)>0;
+  const m=(x,w)=>dir===1 ? px0+x*s : px0+(24-x-w)*s;
+  const py=(y)=>py0+y*s;
+  if(alpha!==undefined) cx.globalAlpha=alpha;
+  pr(px0+4, py0+28, 24, 5, 'rgba(0,0,0,0.18)');
+  pr(m(0,2),   py(5),  2*s,   s, '#C49040');
+  pr(m(2,10),  py(5),  10*s, 6*s,'#D4A855');
+  pr(m(3,7),   py(7),  7*s,  4*s,'#E8C98A');
+  pr(m(3,8),   py(5),  8*s,    s, '#CC2200');
+  pr(m(6,2),   py(6),  2*s,  2*s,'#FFD700');
+  pr(m(3,2),   py(10), 2*s, (leg?4:3)*s,'#C49040');
+  pr(m(7,2),   py(10), 2*s, (leg?3:4)*s,'#C49040');
+  pr(m(11,2),  py(10), 2*s, (leg?4:3)*s,'#C49040');
+  pr(m(10,7),  py(0),  7*s,  6*s,'#D4A855');
+  pr(m(11,5),  py(3),  5*s,  4*s,'#E8C98A');
+  pr(m(12,3),  py(3),  3*s,    s, '#5a2d0c');
+  pr(m(14,1),  py(1),    s,    s, '#8B5E3C');
+  pr(m(10,3),  py(-2), 3*s,  3*s,'#C49040');
+  pr(m(10,2),  py(0),  2*s,  3*s,'#B07830');
+  cx.globalAlpha=1;
+}
+
+// ── Parent sprite ─────────────────────────────────────────────
+function drawParent(p){
+  const s=2;
+  const px0=sx(p.wx)-14, py0=sy(p.wy)-28;
+  const leg=Math.sin(p.fr*0.28)>0;
+  pr(px0+2, py0+52, 24, 5, 'rgba(0,0,0,0.16)');
+  pr(px0+2*s, py0+9*s, 2*s, (leg?5:3)*s,'#223355');
+  pr(px0+5*s, py0+9*s, 2*s, (leg?3:5)*s,'#223355');
+  pr(px0+s,   py0+4*s, 7*s, 5*s, p.col);
+  pr(px0,     py0+4*s,   s, 4*s, p.trim);
+  pr(px0+8*s, py0+4*s,   s, 4*s, p.trim);
+  pr(px0+2*s, py0,     5*s, 4*s,'#FDBCB4');
+  pr(px0+2*s, py0,     5*s,   s, '#3a1e00');
+  pr(px0+3*s, py0+2*s,   s,   s,'#222');
+  pr(px0+5*s, py0+2*s,   s,   s,'#222');
+  pr(px0-2, py0-14, 32, 10, 'rgba(0,0,0,0.75)');
+  cx.fillStyle=p.col;
+  cx.font='6px "Press Start 2P"';
+  cx.textAlign='center';
+  cx.fillText(p.name, px0+14, py0-6);
+}
+
+// ── Map background ────────────────────────────────────────────
+function drawMapBg(){
+  if(!mapLoaded) return;
+  cx.drawImage(mapCanvas,
+    cam.x - shX, cam.y - shY, VW, VH,
+    0,           0,            VW, VH);
+}
+
+// ── Landmark overlays ─────────────────────────────────────────
+function drawLandmarks(){
+  LM.forEach(lm=>{
+    const lx=sx(lm.wx), ly=sy(lm.wy);
+    if(lx+lm.w<0||lx>VW||ly+lm.h<0||ly>VH) return;
+    if(lm.park){
+      cx.fillStyle='rgba(46,170,68,0.35)';
+      cx.fillRect(lx,ly,lm.w,lm.h);
+      cx.strokeStyle='#1A7030';cx.lineWidth=2;
+      cx.strokeRect(lx,ly,lm.w,lm.h);
+    } else {
+      cx.fillStyle='rgba(0,0,0,0.25)';cx.fillRect(lx+3,ly+4,lm.w,lm.h);
+      cx.fillStyle=lm.c+'cc';
+      cx.fillRect(lx,ly,lm.w,lm.h);
+      cx.fillStyle='rgba(0,0,0,0.3)';cx.fillRect(lx,ly,lm.w,7);
+      cx.fillStyle='#2A1200';cx.fillRect(lx+lm.w/2-5,ly+lm.h-18,10,18);
+      cx.fillStyle='rgba(170,221,255,0.8)';cx.fillRect(lx+7,ly+12,12,10);
+      if(lm.w>75) cx.fillRect(lx+lm.w-19,ly+12,12,10);
+    }
+    const lines=lm.n.split('\n');
+    const textY=ly+lm.h/2-(lines.length-1)*5;
+    cx.font='5px "Press Start 2P"';
+    cx.textAlign='center';
+    lines.forEach((ln,i)=>{
+      cx.strokeStyle='rgba(0,0,0,0.95)';cx.lineWidth=3;
+      cx.strokeText(ln, lx+lm.w/2, textY+i*10);
+      cx.fillStyle='#fff';
+      cx.fillText(ln, lx+lm.w/2, textY+i*10);
+    });
+  });
+}
+
+// ── Food collectibles ─────────────────────────────────────────
+function drawFood(){
+  FOOD.forEach(f=>{
+    if(f.col) return;
+    const fx=sx(f.wx), fy=sy(f.wy);
+    if(fx<-20||fx>VW+20||fy<-20||fy>VH+20) return;
+    const b=Math.sin(f.bob)*3;
+    cx.font='15px serif'; cx.textAlign='center';
+    cx.fillText(f.emoji, fx, fy+b);
+    if(gframe%28<14){
+      cx.fillStyle='#FFD700';
+      cx.font='7px serif';
+      cx.fillText('✦', fx+10, fy+b-8);
+    }
+  });
+  BONES.forEach(b=>{
+    if(b.col) return;
+    const bx=sx(b.wx), by=sy(b.wy);
+    if(bx<-20||bx>VW+20||by<-20||by>VH+20) return;
+    cx.font='15px serif'; cx.textAlign='center';
+    cx.fillText('🦴', bx, by+Math.sin(gframe*0.07)*3);
+  });
+}
+
+// ── Particles ─────────────────────────────────────────────────
+function drawParticles(){
+  particles.forEach(p=>{
+    const px2=sx(p.wx), py2=sy(p.wy);
+    cx.globalAlpha=p.life/p.max;
+    cx.font=(p.big?'8':'6')+'px "Press Start 2P"';
+    cx.textAlign='center';
+    cx.strokeStyle='rgba(0,0,0,0.9)'; cx.lineWidth=2;
+    cx.strokeText(p.txt, px2, py2);
+    cx.fillStyle=p.col;
+    cx.fillText(p.txt, px2, py2);
+  });
+  cx.globalAlpha=1;
+}
+
+// ── Minimap ───────────────────────────────────────────────────
+function drawMinimap(){
+  const mw=MM.width, mh=MM.height;
+  mx.clearRect(0,0,mw,mh);
+  if(mapLoaded) mx.drawImage(mapCanvas, 0, 0, WW, WH, 0, 0, mw, mh);
+  else {mx.fillStyle='#2a4a10';mx.fillRect(0,0,mw,mh);}
+  const scx=mw/WW, scy=mh/WH;
+  mx.strokeStyle='rgba(255,220,0,0.9)'; mx.lineWidth=1.5;
+  mx.strokeRect(cam.x*scx, cam.y*scy, VW*scx, VH*scy);
+  mx.fillStyle='#FFD700';
+  mx.fillRect(DOT.wx*scx-2, DOT.wy*scy-2, 5, 5);
+  PARENTS.forEach(p=>{
+    mx.fillStyle=p.col;
+    mx.fillRect(p.wx*scx-2, p.wy*scy-2, 4, 4);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TITLE SCREEN
+// ══════════════════════════════════════════════════════════════
+const BLDGS=[
+  {x:30,w:85,h:130},{x:130,w:60,h:110},{x:210,w:100,h:165},
+  {x:330,w:70,h:120},{x:420,w:90,h:180},{x:530,w:65,h:115},
+  {x:620,w:110,h:155},{x:575,w:50,h:88}
+];
+
+function drawTitleDottie(dsx,dsy,dir,fr){
+  const s=3, px0=dsx-16, py0=dsy-22;
+  const leg=Math.sin(fr*0.32)>0;
+  const m=(x,w)=>dir===1?px0+x*s:px0+(24-x-w)*s;
+  const py=(y)=>py0+y*s;
+  pr(px0+4,py0+32,30,7,'rgba(0,0,0,0.2)');
+  pr(m(0,2),py(5),2*s,s,'#C49040');
+  pr(m(2,10),py(5),10*s,6*s,'#D4A855');
+  pr(m(3,7),py(7),7*s,4*s,'#E8C98A');
+  pr(m(3,8),py(5),8*s,s,'#CC2200');
+  pr(m(6,2),py(6),2*s,2*s,'#FFD700');
+  pr(m(3,2),py(10),2*s,(leg?4:3)*s,'#C49040');
+  pr(m(7,2),py(10),2*s,(leg?3:4)*s,'#C49040');
+  pr(m(11,2),py(10),2*s,(leg?4:3)*s,'#C49040');
+  pr(m(10,7),py(0),7*s,6*s,'#D4A855');
+  pr(m(11,5),py(3),5*s,4*s,'#E8C98A');
+  pr(m(12,3),py(3),3*s,s,'#5a2d0c');
+  pr(m(14,1),py(1),s,s,'#8B5E3C');
+  pr(m(10,3),py(-2),3*s,3*s,'#C49040');
+  pr(m(10,2),py(0),2*s,3*s,'#B07830');
+}
+
+// Detect touch once at draw-time so the title screen shows the right prompt
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+function drawTitle(){
+  const sky=cx.createLinearGradient(0,0,0,VH);
+  sky.addColorStop(0,'#040818'); sky.addColorStop(1,'#0a1835');
+  cx.fillStyle=sky; cx.fillRect(0,0,VW,VH);
+  stars.forEach(s=>{
+    s.tw+=0.035; s.y+=s.spd; if(s.y>VH) s.y=0;
+    cx.fillStyle=`rgba(255,252,210,${0.35+Math.sin(s.tw)*0.4})`;
+    cx.fillRect(s.x,s.y,s.sz,s.sz);
+  });
+  const g=cx.createLinearGradient(0,VH-130,0,VH);
+  g.addColorStop(0,'#3d7020'); g.addColorStop(1,'#254012');
+  cx.fillStyle=g; cx.fillRect(0,VH-130,VW,130);
+  cx.fillStyle='#4a4840'; cx.fillRect(0,VH-86,VW,42);
+  for(let x=titleF%56;x<VW;x+=56){cx.fillStyle='#F5E040';cx.fillRect(x,VH-66,28,4);}
+  BLDGS.forEach(b=>{
+    cx.fillStyle='#12122a'; cx.fillRect(b.x,VH-130-b.h,b.w,b.h);
+    for(let wy2=VH-130-b.h+8;wy2<VH-130-16;wy2+=18)
+      for(let wx2=b.x+7;wx2<b.x+b.w-12;wx2+=15){
+        const lit=Math.sin((wx2*0.3+wy2*0.2+titleF*0.015)*1.1)>0.15;
+        cx.fillStyle=lit?'#FFD070':'#0a0a20'; cx.fillRect(wx2,wy2,9,11);
+      }
+  });
+  drawTitleDottie(titleDX, VH-80, titleDDir, titleF);
+
+  const pw=Math.sin(titleF*0.04)*3;
+  cx.fillStyle='rgba(4,4,18,0.92)';
+  cx.fillRect(VW/2-265+pw/2,52-pw/2,530-pw,215+pw);
+  cx.strokeStyle='#ffe000'; cx.lineWidth=4;
+  cx.strokeRect(VW/2-265+pw/2,52-pw/2,530-pw,215+pw);
+
+  cx.save();
+  cx.shadowColor='#ff4400'; cx.shadowBlur=14;
+  const hue=(titleF*1.8)%360;
+  cx.fillStyle=`hsl(${hue},100%,62%)`; cx.font='30px "Press Start 2P"'; cx.textAlign='center';
+  cx.fillText("DOTTIE'S",VW/2,100);
+  cx.restore();
+
+  cx.fillStyle='#ffe000'; cx.font='20px "Press Start 2P"'; cx.textAlign='center';
+  cx.fillText('MILLTOWN',VW/2,136);
+  cx.fillStyle='#88ffcc'; cx.fillText('FROLIC!',VW/2,164);
+  cx.fillStyle='#888'; cx.font='6px "Press Start 2P"';
+  cx.fillText('★  ESCAPE FROM 141 ALBERT AVE · MILLTOWN NJ  ★',VW/2,192);
+
+  // Show appropriate control hint based on device type
+  if(IS_TOUCH){
+    cx.fillText('Use D-Pad to move  •  🚀 button to zoom!',VW/2,210);
+  } else {
+    cx.fillText('Arrow Keys / WASD  •  Space = boost  •  P = pause',VW/2,210);
+  }
+
+  if(Math.floor(titleF/28)%2===0){
+    cx.fillStyle='#fff'; cx.font='10px "Press Start 2P"';
+    const startMsg = IS_TOUCH ? 'TAP  TO  START' : 'PRESS  SPACE  TO  START';
+    cx.fillText(startMsg,VW/2,278);
+  }
+
+  const hsy=308;
+  cx.fillStyle='rgba(4,4,18,0.9)'; cx.fillRect(VW/2-170,hsy,340,182);
+  cx.strokeStyle='#ffe000'; cx.lineWidth=2; cx.strokeRect(VW/2-170,hsy,340,182);
+  cx.fillStyle='#FFD700'; cx.font='8px "Press Start 2P"';
+  cx.fillText('🏆  HIGH SCORES  🏆',VW/2,hsy+22);
+  const sc=loadHS();
+  if(!sc.length){
+    cx.fillStyle='#666'; cx.font='7px "Press Start 2P"'; cx.fillText('no scores yet!',VW/2,hsy+60);
+  } else {
+    ['🥇','🥈','🥉','4.','5.'].forEach((m,i)=>{
+      if(!sc[i]) return;
+      cx.fillStyle=['#FFD700','#C0C0C0','#CD7F32','#aaa','#888'][i];
+      cx.font='7px "Press Start 2P"';
+      cx.fillText(`${m}  ${sc[i]} pts`,VW/2,hsy+44+i*26);
+    });
+  }
+}
+
+// ── Game Over ─────────────────────────────────────────────────
+function drawGameOver(){
+  cx.fillStyle='rgba(0,0,8,0.88)'; cx.fillRect(0,0,VW,VH);
+  const bx=VW/2-225, by=VH/2-210;
+  cx.fillStyle='rgba(4,4,20,0.97)'; cx.fillRect(bx,by,450,420);
+  cx.strokeStyle='#ff4444'; cx.lineWidth=4; cx.strokeRect(bx,by,450,420);
+  cx.save();
+  cx.shadowColor='#ff0000'; cx.shadowBlur=12;
+  cx.fillStyle='#ff5555'; cx.font='18px "Press Start 2P"'; cx.textAlign='center';
+  cx.fillText('OH NO!',VW/2,by+44);
+  cx.restore();
+  cx.fillStyle='#ff8888'; cx.font='12px "Press Start 2P"'; cx.textAlign='center';
+  cx.fillText('DOTTIE GOT CAUGHT!',VW/2,by+74);
+  cx.fillStyle='#777'; cx.font='6px "Press Start 2P"';
+  cx.fillText('back on the leash... 😔',VW/2,by+98);
+  cx.fillStyle='#FFD700'; cx.font='12px "Press Start 2P"';
+  cx.fillText('SCORE: '+score,VW/2,by+128);
+  cx.font='8px "Press Start 2P"'; cx.fillText('🏆 TOP SCORES',VW/2,by+158);
+  ['🥇','🥈','🥉','4.','5.'].forEach((m,i)=>{
+    if(!HS[i]) return;
+    const isNew=i===0&&HS[i]===score;
+    cx.fillStyle=isNew?'#FFD700':['#FFD700','#C0C0C0','#CD7F32','#aaa','#888'][i];
+    cx.font='7px "Press Start 2P"';
+    cx.fillText(`${isNew?'★':m}  ${HS[i]} pts`,VW/2,by+184+i*22);
+  });
+  if(Math.floor(titleF/26)%2===0){
+    cx.fillStyle='#fff'; cx.font='9px "Press Start 2P"';
+    const restartMsg = IS_TOUCH ? 'TAP TO PLAY AGAIN' : 'SPACE TO PLAY AGAIN';
+    cx.fillText(restartMsg,VW/2,by+300);
+  }
+  cx.fillStyle='#555'; cx.font='6px "Press Start 2P"';
+  cx.fillText('🐾  good girl, dottie  🐾',VW/2,by+330);
+}
+
+function drawPause(){
+  cx.fillStyle='rgba(0,0,8,0.72)'; cx.fillRect(0,0,VW,VH);
+  cx.fillStyle='#ffe000'; cx.font='22px "Press Start 2P"'; cx.textAlign='center';
+  cx.fillText('PAUSED',VW/2,VH/2-16);
+  cx.fillStyle='#aaa'; cx.font='8px "Press Start 2P"';
+  const resumeMsg = IS_TOUCH ? 'TAP GAME TO RESUME' : 'P or ESC to resume';
+  cx.fillText(resumeMsg,VW/2,VH/2+20);
+}
+
+// ── Key bindings ──────────────────────────────────────────────
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){
+    if(STATE==='title')    resetGame();
+    if(STATE==='gameover') resetGame();
+  }
+  if(e.code==='Escape'||e.code==='KeyP'){
+    if(STATE==='playing') STATE='paused';
+    else if(STATE==='paused') STATE='playing';
+  }
+},{passive:true});
+
+// Tap canvas to resume from pause (mobile)
+C.addEventListener('touchstart', e=>{
+  if(STATE==='paused') STATE='playing';
+},{passive:true});
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════
+function render(){
+  if(STATE==='loading') return;
+  resetCtx(cx);
+  cx.clearRect(0,0,VW,VH);
+  if(STATE==='title'){
+    drawTitle();
+    return;
+  }
+  if(STATE==='playing'||STATE==='paused'){
+    drawMapBg();
+    drawLandmarks();
+    drawFood();
+    PARENTS.forEach(p=>drawParent(p));
+    if(DOT.boosting&&gframe%4<2)
+      drawDot(DOT.wx-(DOT.dir*14), DOT.wy, DOT.dir, gframe, 0.3);
+    drawDot(DOT.wx, DOT.wy, DOT.dir, gframe);
+    drawParticles();
+    if(STATE==='paused') drawPause();
+    drawMinimap();
+    cx.fillStyle='rgba(0,0,0,0.55)'; cx.fillRect(VW-182,VH-14,182,14);
+    cx.fillStyle='rgba(255,255,255,0.75)'; cx.font='5px sans-serif'; cx.textAlign='right';
+    cx.fillText('© OpenStreetMap contributors',VW-3,VH-4);
+    return;
+  }
+  if(STATE==='gameover'){
+    drawGameOver();
+  }
+}
+
+// ── Main loop ─────────────────────────────────────────────────
+function loop(){ update(); render(); requestAnimationFrame(loop); }
+
+// ── Boot ──────────────────────────────────────────────────────
+initLandmarks();
+(function(){
+  const home=LM.find(l=>l.n.startsWith('HOME'));
+  if(home){DOT.wx=home.wx+home.w/2; DOT.wy=home.wy+home.h/2;}
+})();
+
+// Apply initial scale before anything renders
+resizeGame();
+setupTouchControls();
+
+loadMapTiles().then(()=>{
+  STATE='title';
+}).catch(()=>{
+  document.getElementById('loadMsg').textContent='Map unavailable — playing anyway!';
+  setTimeout(()=>{
+    document.getElementById('loading').style.display='none';
+    STATE='title';
+  },1200);
+});
+
+loop();
+</script>
+</body>
+</html>

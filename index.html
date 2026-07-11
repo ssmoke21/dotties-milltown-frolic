@@ -2,10 +2,51 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="0; url=dotties-milltown-frolic-v8.html">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dottie's Milltown Frolic!</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  min-height:100vh;background:#0d0d1f;color:#fff;
+  font-family:'Press Start 2P',monospace;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:34px;padding:24px;text-align:center;
+}
+h1{font-size:clamp(14px,3.5vw,26px);color:#ffe000;text-shadow:0 0 18px #ffe000aa;line-height:1.6;}
+.sub{font-size:9px;color:#888;line-height:1.8;}
+.cards{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;}
+a.card{
+  display:block;width:290px;padding:26px 20px;text-decoration:none;color:#fff;
+  border:4px solid #ffe000;background:#131328;
+  box-shadow:0 0 24px #ffe00055;transition:transform .12s;
+}
+a.card:hover{transform:scale(1.05);}
+a.card.new{border-color:#88ffcc;box-shadow:0 0 24px #88ffcc66;}
+.badge{display:inline-block;font-size:8px;padding:5px 8px;margin-bottom:14px;background:#88ffcc;color:#062;}
+.badge.classic{background:#ffe000;color:#530;}
+.card h2{font-size:12px;line-height:1.7;margin-bottom:14px;color:#ffe000;}
+a.card.new h2{color:#88ffcc;}
+.card p{font-size:7px;color:#aaa;line-height:1.9;}
+.paw{font-size:26px;}
+</style>
 </head>
 <body>
-<p>Loading game... <a href="dotties-milltown-frolic-v8.html">Click here</a> if not redirected.</p>
+<h1>🐾 DOTTIE'S MILLTOWN FROLIC 🐾</h1>
+<p class="sub">Dottie the dog is off the leash in Milltown, NJ!<br>Pick your adventure:</p>
+<div class="cards">
+  <a class="card new" href="dotties-milltown-frolic-2.html">
+    <span class="badge">NEW!</span>
+    <div class="paw">🌟</div>
+    <h2>FROLIC 2<br>DELUXE ADVENTURE</h2>
+    <p>Hand-drawn pixel-art Milltown · delivery missions · power-ups · squirrels · cars · dog catcher · day &amp; night · rain · chiptune music</p>
+  </a>
+  <a class="card" href="dotties-milltown-frolic-v8.html">
+    <span class="badge classic">CLASSIC</span>
+    <div class="paw">🗺️</div>
+    <h2>THE ORIGINAL<br>(v8)</h2>
+    <p>The classic frolic on real OpenStreetMap tiles of Milltown · collect treats · dodge Mom &amp; Dad</p>
+  </a>
+</div>
 </body>
 </html>
